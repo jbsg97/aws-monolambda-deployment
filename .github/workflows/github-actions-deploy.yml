@@ -1,5 +1,17 @@
 name: Mono-Repo Deployment
-on: [push]
+on: 
+  push:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - qa
+        - production
 jobs:
   deployment:
     runs-on: ubuntu-latest
@@ -18,4 +30,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       - name: Run deployment script
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH_NAME:  ${{ github.ref_name }}
+          S3_BUCKET_DEV: ${{ vars.S3_BUCKET_DEV }}
+          S3_BUCKET_QA: ${{ vars.S3_BUCKET_QA }}
+          S3_BUCKET_PROD: ${{ vars.S3_BUCKET_PROD }}
         run: python build_scripts/deploy_lambdas.py

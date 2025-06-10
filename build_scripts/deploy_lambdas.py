@@ -15,14 +15,14 @@ def get_environment_config():
     
     # If not a rollback, determine environment from branch name
     if not is_rollback:
-        branch_name = os.environ.get('BRANCH_NAME', '').replace('refs/heads/', '')
+        branch_name = os.environ.get('BRANCH_NAME', '')
         print(f"Branch name: {branch_name}")
         
         if branch_name.startswith('feature/'):
             environment = 'dev'
         elif branch_name == 'qa':
             environment = 'qa'
-        elif branch_name == 'master':
+        elif branch_name == 'main':
             environment = 'prod'
         else:
             environment = 'dev'
@@ -102,7 +102,7 @@ def find_lambda_functions(base_dir='lambdas'):
 def main():
     # Get environment variables
     environment, s3_bucket, is_rollback, specific_lambdas = get_environment_config()
-    commit_id = os.environ.get('COMMIT_ID', 'unknown')
+    commit_id = os.environ.get('COMMIT_SHA', 'unknown')
     branch_name = os.environ['BRANCH_NAME']
 
     # Initialize AWS clients
