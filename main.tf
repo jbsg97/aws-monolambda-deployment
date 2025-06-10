@@ -27,6 +27,28 @@ resource "aws_iam_role" "lambda_shared_role" {
   }
 }
 
+resource "aws_iam_role_policy" "lambda_invoke_policy" {
+  name = "lambda-invoke-policy"
+  role = aws_iam_role.lambda_shared_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:InvokeFunction"
+        ]
+        Resource = [
+          "arn:aws:lambda:*:${data.aws_caller_identity.current.account_id}:function:*"
+        ]
+      }
+    ]
+  })
+}
+
+data "aws_caller_identity" "current" {}
+
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
   role       = aws_iam_role.lambda_shared_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
