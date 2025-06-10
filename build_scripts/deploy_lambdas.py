@@ -174,6 +174,7 @@ def main():
                 deployment_id = f"{function_name}_{environment}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
                 developer = os.environ.get('DEVELOPER').strip()
                 local_time = datetime.now(ZoneInfo("America/Mexico_City"))
+                formatted_time = local_time.strftime('%b %d, %Y %H:%M')
                 dynamodb.put_item(
                     TableName='lambda-deployments',
                     Item={
@@ -182,7 +183,7 @@ def main():
                         'developer': {'S': developer},
                         'environment': {'S': environment},
                         'code_hash': {'S': code_hash},
-                        'deployed_at': {'S': local_time},
+                        'deployed_at': {'S': formatted_time},
                         'commit_id': {'S': commit_id},
                         'branch_name': {'S': branch_name}
                     }
