@@ -135,15 +135,19 @@ def main():
 
             # Check existing deployment in DynamoDB
             try:
-                response = dynamodb.get_item(
+                response = dynamodb.query(
                     TableName='lambda-deployments',
-                    Key={
-                        'function_name': {'S': function_name},
-                        'environment': {'S': environment}
+                    IndexName='function_env_index',
+                    KeyConditionExpression='function_name = :fn AND environment = :env',
+                    ExpressionAttributeValues={
+                        ':fn': {'S': function_name},
+                        ':env': {'S': environment}
                     },
                     ProjectionExpression='code_hash'
                 )
-                existing_hash = response.get('Item', {}).get('code_hash', {}).get('S', '')
+                
+                items = response.get('Items', [])
+                existing_hash = items[0].get('code_hash', {}).get('S', '') if items else ''
             except Exception as e:
                 print(f"Warning: Could not get existing hash: {e}")
                 existing_hash = ''
