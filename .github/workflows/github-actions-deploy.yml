@@ -2,16 +2,6 @@ name: Mono-Repo Deployment
 on: 
   push:
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-        - staging
-        - qa
-        - production
 jobs:
   deployment:
     runs-on: ubuntu-latest
