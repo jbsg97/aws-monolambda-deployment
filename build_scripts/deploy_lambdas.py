@@ -1,10 +1,10 @@
 import os
-import glob
 import hashlib
 import boto3
 import zipfile
+
 from datetime import datetime
-import shutil
+from zoneinfo import ZoneInfo
 
 def get_environment_config():
     """Determine environment and S3 bucket based on environment variables"""
@@ -173,6 +173,7 @@ def main():
                 # Record deployment in DynamoDB
                 deployment_id = f"{function_name}_{environment}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
                 developer = os.environ.get('DEVELOPER').strip()
+                local_time = datetime.now(ZoneInfo("America/Mexico_City"))
                 dynamodb.put_item(
                     TableName='lambda-deployments',
                     Item={
@@ -181,7 +182,7 @@ def main():
                         'developer': {'S': developer},
                         'environment': {'S': environment},
                         'code_hash': {'S': code_hash},
-                        'deployed_at': {'S': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')},
+                        'deployed_at': {'S': local_time},
                         'commit_id': {'S': commit_id},
                         'branch_name': {'S': branch_name}
                     }
