@@ -172,14 +172,16 @@ def main():
 
                 # Record deployment in DynamoDB
                 deployment_id = f"{function_name}_{environment}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+                developer = os.environ.get('DEVELOPER').strip()
                 dynamodb.put_item(
                     TableName='lambda-deployments',
                     Item={
                         'deployment_id': {'S': deployment_id},
                         'function_name': {'S': function_name},
+                        'developer': {'S': developer},
                         'environment': {'S': environment},
                         'code_hash': {'S': code_hash},
-                        'deploy_time': {'S': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')},
+                        'deployed_at': {'S': datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')},
                         'commit_id': {'S': commit_id},
                         'branch_name': {'S': branch_name}
                     }
