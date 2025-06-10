@@ -29,9 +29,9 @@ def get_environment_config():
 
     # Environment mapping
     env_config = {
-        'dev': os.environ['S3_BUCKET_DEV'],
-        'qa': os.environ['S3_BUCKET_QA'],
-        'prod': os.environ['S3_BUCKET_PROD']
+        'dev': os.environ['S3_BUCKET_DEV'].strip(),
+        'qa': os.environ['S3_BUCKET_QA'].strip(),
+        'prod': os.environ['S3_BUCKET_PROD'].strip()
     }
     
     s3_bucket = env_config[environment]
@@ -102,8 +102,8 @@ def find_lambda_functions(base_dir='lambdas'):
 def main():
     # Get environment variables
     environment, s3_bucket, is_rollback, specific_lambdas = get_environment_config()
-    commit_id = os.environ.get('COMMIT_SHA', 'unknown')
-    branch_name = os.environ['BRANCH_NAME']
+    commit_id = os.environ.get('COMMIT_SHA', 'unknown').strip()
+    branch_name = os.environ.get('BRANCH_NAME', 'dev').strip()
 
     # Initialize AWS clients
     s3 = boto3.client('s3')
