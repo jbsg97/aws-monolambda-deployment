@@ -12,12 +12,16 @@ def lambda_handler(event, context):
     # If in feature branch, use feature alias
     qualifier = f"feature-{feature}" if feature else None
     
-    response = lambda_client.invoke(
-        FunctionName=f'lambda-b_{env}',
-        Qualifier=qualifier,  # Will use $LATEST if None
-        InvocationType='RequestResponse',
-        Payload=json.dumps(event)
-    )
+    invoke_args = {
+        'FunctionName': f'lambda-b_{env}',
+        'InvocationType': 'RequestResponse',
+        'Payload': json.dumps(event)
+    }
+
+    if qualifier:
+        invoke_args['Qualifier'] = qualifier
+
+    response = lambda_client.invoke(**invoke_args)
     return {
         'statusCode': 200,
         'body': f'Testing lambda-b_{env} response',
