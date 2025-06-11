@@ -66,8 +66,8 @@ jobs:
         with:
           name: terraform-plan
           path: ./terraform/tfplan
-      - name: Terraform Apply (Manual Approval)
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.apply_terraform == 'true' }}
+      - name: Terraform Apply (Manual Approval or Commit Trigger for Dev/QA)
+        if: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.apply_terraform == 'true') || (github.event_name == 'push' && (contains(github.event.head_commit.message, '[terraform-dev]') || contains(github.event.head_commit.message, '[terraform-qa]'))) }}
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
         env:
