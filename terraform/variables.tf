@@ -67,6 +67,12 @@ variable "lambda_functions" {
   }
 }
 
+variable "environment" {
+  description = "Deployment environment (dev, qa, prod)"
+  type        = string
+  default     = "dev"
+}
+
 variable "s3_buckets" {
   description = "Map of S3 bucket names for Lambda artifacts by environment"
   type        = map(string)
