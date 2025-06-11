@@ -1,5 +1,7 @@
+# Core Lambda Function Configuration
 variable "function_name" {
-  type = string
+  description = "Name of the Lambda function"
+  type        = string
 }
 
 variable "s3_bucket" {
@@ -8,39 +10,44 @@ variable "s3_bucket" {
 }
 
 variable "s3_key" {
-  description = "S3 key for Lambda function code"
+  description = "S3 key for Lambda function code (optional, managed externally if not set)"
   type        = string
   default     = null
 }
 
 variable "handler" {
-  type = string
+  description = "Entry point for the Lambda function (e.g., file.function)"
+  type        = string
 }
 
 variable "runtime" {
-  type    = string
-  default = "python3.9"
+  description = "Runtime environment for the Lambda function"
+  type        = string
+  default     = "python3.9"
 }
 
 variable "source_code_hash" {
+  description = "Hash of the source code, used to trigger updates when code changes (managed externally)"
   type        = string
-  description = "Used to trigger updates when code changes"
   default     = "dummy-hash"
 }
 
 variable "environment_variables" {
-  type    = map(string)
-  default = {}
+  description = "Environment variables for the Lambda function"
+  type        = map(string)
+  default     = {}
 }
 
 variable "tags" {
-  type    = map(string)
-  default = {}
+  description = "Tags to apply to the Lambda function"
+  type        = map(string)
+  default     = {}
 }
 
 variable "layers" {
-  type    = list(string)
-  default = []
+  description = "List of Lambda layer ARNs to attach to the function"
+  type        = list(string)
+  default     = []
 }
 
 variable "environment" {
@@ -49,33 +56,23 @@ variable "environment" {
 }
 
 variable "memory_size" {
-  description = "Lambda function memory size"
+  description = "Lambda function memory size in MB (must be between 128 and 10240)"
   type        = number
   default     = 128
+  validation {
+    condition     = var.memory_size >= 128 && var.memory_size <= 10240
+    error_message = "Memory size must be between 128 and 10240 MB."
+  }
 }
 
 variable "timeout" {
-  description = "Lambda function timeout"
+  description = "Lambda function timeout in seconds (must be between 1 and 900)"
   type        = number
   default     = 30
-}
-
-variable "developer_last_updated" {
-  description = "Developer who last updated this Lambda"
-  type        = string
-  default     = "unknown"
-}
-
-variable "feature_name" {
-  description = "Name of feature branch (if any)"
-  type        = string
-  default     = ""
-}
-
-variable "team_name" {
-  description = "Name of team working on feature"
-  type        = string
-  default     = ""
+  validation {
+    condition     = var.timeout >= 1 && var.timeout <= 900
+    error_message = "Timeout must be between 1 and 900 seconds."
+  }
 }
 
 variable "role_arn" {
@@ -84,6 +81,48 @@ variable "role_arn" {
 }
 
 variable "source_dir" {
-  description = "Local path to Lambda function source code"
+  description = "Local path to Lambda function source code (for reference, not used in deployment)"
   type        = string
+}
+
+# Feature Testing Configuration
+variable "feature_name" {
+  description = "Name of feature branch for alias creation (if any)"
+  type        = string
+  default     = ""
+}
+
+# Advanced Lambda Configurations
+variable "vpc_subnet_ids" {
+  description = "List of subnet IDs for VPC configuration (optional)"
+  type        = list(string)
+  default     = null
+}
+
+variable "vpc_security_group_ids" {
+  description = "List of security group IDs for VPC configuration (optional)"
+  type        = list(string)
+  default     = null
+}
+
+variable "dead_letter_queue_arn" {
+  description = "ARN of the Dead Letter Queue for error handling (optional)"
+  type        = string
+  default     = null
+}
+
+variable "tracing_enabled" {
+  description = "Enable AWS X-Ray tracing for the Lambda function"
+  type        = bool
+  default     = false
+}
+
+variable "provisioned_concurrency" {
+  description = "Number of provisioned concurrency instances (0 to disable)"
+  type        = number
+  default     = 0
+  validation {
+    condition     = var.provisioned_concurrency >= 0
+    error_message = "Provisioned concurrency must be 0 or greater."
+  }
 }
