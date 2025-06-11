@@ -277,6 +277,75 @@ module "lambda_c_prod" {
   depends_on = [aws_s3_bucket.lambda_artifacts]
 }
 
+module "lambda_d_dev" {
+  source        = "./modules/lambda"
+  source_dir = "../lambdas/payments/lambda-d"
+  function_name = "lambda-d"
+  environment   = "dev"
+  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
+  memory_size   = local.environments.dev.lambda_config.memory_size
+  timeout       = local.environments.dev.lambda_config.timeout
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.12"
+  environment_variables = {
+    db_mvshub = "1233213"
+    db_pass = "dsadw232"
+  }
+  tags          = merge(local.environments.dev.tags, {
+    Autor       = "Juan Perez"  
+  })
+  role_arn = aws_iam_role.lambda_shared_role.arn
+  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
+  source_code_hash = "dummy-hash"
+  depends_on = [aws_s3_bucket.lambda_artifacts]
+}
+
+module "lambda_d_qa" {
+  source        = "./modules/lambda"
+  source_dir = "../lambdas/payments/lambda-d"
+  function_name = "lambda-d"
+  environment   = "qa"
+  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
+  memory_size   = local.environments.qa.lambda_config.memory_size
+  timeout       = local.environments.qa.lambda_config.timeout
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.12"
+  environment_variables = {
+    db_mvshub = "1233213"
+    db_pass = "dsadw232"
+  }
+  tags          = merge(local.environments.qa.tags, {
+    Autor       = "Juan Perez"  
+  })
+  role_arn = aws_iam_role.lambda_shared_role.arn
+  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
+  source_code_hash = "dummy-hash"
+  depends_on = [aws_s3_bucket.lambda_artifacts]
+}
+
+module "lambda_d_prod" {
+  source        = "./modules/lambda"
+  source_dir = "../lambdas/payments/lambda-d"
+  function_name = "lambda-d"
+  environment   = "prod"
+  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
+  memory_size   = local.environments.prod.lambda_config.memory_size
+  timeout       = local.environments.prod.lambda_config.timeout
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.12"
+  environment_variables = {
+    db_mvshub = "1233213"
+    db_pass = "dsadw232"
+  }
+  tags          = merge(local.environments.prod.tags, {
+    Autor       = "Juan Perez"  
+  })
+  role_arn = aws_iam_role.lambda_shared_role.arn
+  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
+  source_code_hash = "dummy-hash"
+  depends_on = [aws_s3_bucket.lambda_artifacts]
+}
+
 resource "aws_dynamodb_table" "lambda_deployments" {
   name           = "lambda-deployments"
   billing_mode   = "PAY_PER_REQUEST"
