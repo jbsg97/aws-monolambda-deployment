@@ -1,5 +1,8 @@
+# Data sources for AWS information
 data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
 
+# IAM Role for Lambda Functions
 resource "aws_iam_role" "lambda_shared_role" {
   name = "mvshub-lambda-shared-role"
 
@@ -14,13 +17,15 @@ resource "aws_iam_role" "lambda_shared_role" {
     }]
   })
 
-  tags = {
-    Name = "MVSHub Lambda Shared Role"
-    Project = "MVSHUB"
-    ManagedBy = "Terraform"
-  }
+  tags = merge(
+    var.project_tags,
+    {
+      Name = "MVSHub Lambda Shared Role"
+    }
+  )
 }
 
+# IAM Policy for Lambda to invoke other Lambda functions
 resource "aws_iam_role_policy" "lambda_invoke_policy" {
   name = "lambda-invoke-policy"
   role = aws_iam_role.lambda_shared_role.id
@@ -41,25 +46,29 @@ resource "aws_iam_role_policy" "lambda_invoke_policy" {
   })
 }
 
-data "aws_caller_identity" "current" {}
-
+# Attach AWS Lambda Basic Execution Role
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
   role       = aws_iam_role.lambda_shared_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# S3 Buckets for Lambda Artifacts
 resource "aws_s3_bucket" "lambda_artifacts" {
-  for_each = {
-    dev  = "mvshub-lambda-artifacts-dev"
-    qa   = "mvshub-lambda-artifacts-qa"
-    prod = "mvshub-lambda-artifacts-prod"
-    dummy_lambda = "dummy-code-for-aws-lambda"
-  }
+  for_each = var.s3_buckets
   
   bucket = each.value
   force_destroy = true
+
+  tags = merge(
+    var.project_tags,
+    {
+      Name = "Lambda Artifacts - ${each.key}"
+      Environment = each.key == "dummy_lambda" ? "all" : each.key
+    }
+  )
 }
 
+# Dummy Lambda for initial setup (to be replaced with real deployment logic)
 data "archive_file" "dummy_lambda" {
   type        = "zip"
   source_dir  = "modules/lambda/dummy"
@@ -71,281 +80,47 @@ resource "aws_s3_object" "lambda_dummy" {
   key    = "dummy_lambda.zip"
   source = data.archive_file.dummy_lambda.output_path
   etag   = filemd5(data.archive_file.dummy_lambda.output_path)
+
+  tags = merge(
+    var.project_tags,
+    {
+      Name = "Dummy Lambda Artifact"
+    }
+  )
 }
 
-module "lambda_a_dev" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/lambda-a"
-  function_name = "lambda-a"
-  environment   = "dev"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.dev.lambda_config.memory_size
-  timeout       = local.environments.dev.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_mvshub = "1233213"
-    db_pass = "dsadw232"
+# Dynamic Lambda Modules for each Function and Environment
+# This reduces code duplication by creating Lambda resources for each function across all environments
+module "lambda_functions" {
+  for_each = {
+    for pair in setproduct(keys(var.lambda_functions), keys(local.environments)) : "${pair[0]}-${pair[1]}" => {
+      function_name = pair[0]
+      env           = pair[1]
+    }
   }
-  tags          = merge(local.environments.dev.tags, {
-    Autor       = "Will Smith"   
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_a_qa" {
+  
   source        = "./modules/lambda"
-  source_dir = "../lambdas/lambda-a"
-  function_name = "lambda-a"
-  environment   = "qa"
+  source_dir    = var.lambda_functions[each.value.function_name].source_dir
+  function_name = each.value.function_name
+  environment   = each.value.env
   s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.qa.lambda_config.memory_size
-  timeout       = local.environments.qa.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_mvshub = "1233213"
-    db_pass = "dsadw232"
-  }
-  tags          = merge(local.environments.qa.tags, {
-    Autor       = "Will Smith" 
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
+  memory_size   = local.environments[each.value.env].lambda_config.memory_size
+  timeout       = local.environments[each.value.env].lambda_config.timeout
+  handler       = var.lambda_functions[each.value.function_name].handler
+  runtime       = var.lambda_functions[each.value.function_name].runtime
+  environment_variables = local.environments[each.value.env].lambda_config.environment_variables
+  tags          = merge(
+    local.environments[each.value.env].tags,
+    {
+      Author = var.lambda_functions[each.value.function_name].authors[each.value.env]
+    }
+  )
+  role_arn      = aws_iam_role.lambda_shared_role.arn
+  layers        = var.lambda_functions[each.value.function_name].layers
+  source_code_hash = "dummy-hash"  # TODO: Replace with actual hash from deployment process
 }
 
-module "lambda_a_prod" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/lambda-a"
-  function_name = "lambda-a"
-  environment   = "prod"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.prod.lambda_config.memory_size
-  timeout       = local.environments.prod.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_mvshub = "1233213"
-    db_pass = "dsadw232"
-  }
-  tags          = merge(local.environments.prod.tags, {
-    Autor       = "Will Smith"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_b_dev" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/lambda-b"
-  function_name = "lambda-b"
-  environment   = "dev"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.dev.lambda_config.memory_size
-  timeout       = local.environments.dev.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_cache = "weqee"
-    db_pass = "fasfd"
-  }
-  tags          = merge(local.environments.dev.tags, {
-    Autor       = "John Doe"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_b_qa" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/lambda-b"
-  function_name = "lambda-b"
-  environment   = "qa"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.qa.lambda_config.memory_size
-  timeout       = local.environments.qa.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_cache = "weqee"
-    db_pass = "fasfd"
-  }
-  tags          = merge(local.environments.dev.tags, {
-    Autor       = "John Doe"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_b_prod" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/lambda-b"
-  function_name = "lambda-b"
-  environment   = "prod"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.prod.lambda_config.memory_size
-  timeout       = local.environments.prod.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_cache = "weqee"
-    db_pass = "fasfd"
-  }
-  tags          = merge(local.environments.prod.tags, {
-    Autor       = "John Doe"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_c_dev" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/lambda-c"
-  function_name = "lambda-c"
-  environment   = "dev"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.dev.lambda_config.memory_size
-  timeout       = local.environments.dev.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_mvshub = "1233213"
-    db_pass = "dsadw232"
-  }
-  tags          = merge(local.environments.dev.tags, {
-    Autor       = "Juan Perez"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_c_qa" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/lambda-c"
-  function_name = "lambda-c"
-  environment   = "qa"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.qa.lambda_config.memory_size
-  timeout       = local.environments.qa.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_mvshub = "1233213"
-    db_pass = "dsadw232"
-  }
-  tags          = merge(local.environments.qa.tags, {
-    Autor       = "Juan Perez"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_c_prod" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/lambda-c"
-  function_name = "lambda-c"
-  environment   = "prod"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.prod.lambda_config.memory_size
-  timeout       = local.environments.prod.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_mvshub = "1233213"
-    db_pass = "dsadw232"
-  }
-  tags          = merge(local.environments.prod.tags, {
-    Autor       = "Juan Perez"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_d_dev" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/payments/lambda-d"
-  function_name = "lambda-d"
-  environment   = "dev"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.dev.lambda_config.memory_size
-  timeout       = local.environments.dev.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_mvshub = "1233213"
-    db_pass = "dsadw232"
-  }
-  tags          = merge(local.environments.dev.tags, {
-    Autor       = "Juan Perez"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_d_qa" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/payments/lambda-d"
-  function_name = "lambda-d"
-  environment   = "qa"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.qa.lambda_config.memory_size
-  timeout       = local.environments.qa.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_mvshub = "1233213"
-    db_pass = "dsadw232"
-  }
-  tags          = merge(local.environments.qa.tags, {
-    Autor       = "Juan Perez"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
-module "lambda_d_prod" {
-  source        = "./modules/lambda"
-  source_dir = "../lambdas/payments/lambda-d"
-  function_name = "lambda-d"
-  environment   = "prod"
-  s3_bucket     = aws_s3_bucket.lambda_artifacts["dummy_lambda"].id
-  memory_size   = local.environments.prod.lambda_config.memory_size
-  timeout       = local.environments.prod.lambda_config.timeout
-  handler       = "lambda_function.lambda_handler"
-  runtime       = "python3.12"
-  environment_variables = {
-    db_mvshub = "1233213"
-    db_pass = "dsadw232"
-  }
-  tags          = merge(local.environments.prod.tags, {
-    Autor       = "Juan Perez"  
-  })
-  role_arn = aws_iam_role.lambda_shared_role.arn
-  layers = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
-  source_code_hash = "dummy-hash"
-  depends_on = [aws_s3_bucket.lambda_artifacts]
-}
-
+# DynamoDB Table for Lambda Deployments Tracking
 resource "aws_dynamodb_table" "lambda_deployments" {
   name           = "lambda-deployments"
   billing_mode   = "PAY_PER_REQUEST"
@@ -374,31 +149,41 @@ resource "aws_dynamodb_table" "lambda_deployments" {
     projection_type    = "ALL"
   }
 
-  tags = {
-    Name        = "Lambda Deployments Tracking"
-    Environment = "all"
-    ManagedBy   = "Terraform"
-  }
+  tags = merge(
+    var.project_tags,
+    {
+      Name        = "Lambda Deployments Tracking"
+      Environment = "all"
+    }
+  )
 }
 
+# API Gateway for Lambda Functions
 resource "aws_apigatewayv2_api" "lambda_api" {
   name          = "lambda-feature-api"
   protocol_type = "HTTP"
   description   = "API Gateway for feature testing"
+
+  tags = merge(
+    var.project_tags,
+    {
+      Name = "Lambda Feature API"
+    }
+  )
 }
 
+# API Gateway Stages for each Environment
 resource "aws_apigatewayv2_stage" "base_stages" {
-  for_each = {
-    dev  = "Development Stage"
-    qa   = "QA Stage"
-    prod = "Production Stage"
-  }
+  for_each = local.environments
 
   api_id      = aws_apigatewayv2_api.lambda_api.id
   name        = each.key
   auto_deploy = true
 
-  tags = merge(local.environments[each.key].tags, {
-    Name = "Base ${each.key} stage"
-  })
+  tags = merge(
+    each.value.tags,
+    {
+      Name = "Base ${each.key} stage"
+    }
+  )
 }
