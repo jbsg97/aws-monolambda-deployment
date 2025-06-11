@@ -18,6 +18,7 @@ from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from botocore.exceptions import ClientError
+from botocore.config import Config
 
 # Constants
 LAMBDA_BASE_DIR = 'lambdas'
@@ -72,7 +73,7 @@ class LambdaDeployer:
         try:
             return boto3.client(
                 service_name,
-                config=boto3.config.Config(
+                config=Config(
                     retries={'max_attempts': MAX_RETRIES, 'mode': 'standard'}
                 )
             )
