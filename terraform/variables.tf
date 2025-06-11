@@ -59,9 +59,9 @@ variable "lambda_functions" {
       runtime    = "python3.12"
       layers     = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
       authors    = {
-        dev  = "Miguel Perez"
-        qa   = "Miguel Perez"
-        prod = "Miguel Perez"
+        dev  = "Miguel Angel Perez"
+        qa   = "Miguel Angel Perez"
+        prod = "Miguel Angel Perez"
       }
     }
   }
