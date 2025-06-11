@@ -53,6 +53,17 @@ variable "lambda_functions" {
         prod = "Juan Perez"
       }
     }
+    "lambda-e" = {
+      source_dir = "../lambdas/payments/lambda-e"
+      handler    = "lambda_function.lambda_handler"
+      runtime    = "python3.12"
+      layers     = ["arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2:78"]
+      authors    = {
+        dev  = "Miguel Perez"
+        qa   = "Miguel Perez"
+        prod = "Miguel Perez"
+      }
+    }
   }
 }
 
