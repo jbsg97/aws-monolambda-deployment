@@ -1,10 +1,68 @@
-name: Mono-Repo Deployment
+name: Mono-Repo Deployment with Terraform
 on: 
   push:
+    branches:
+      - main
+      - qa
+      - feature/*
+    paths:
+      - 'terraform/**'
+      - 'lambdas/**'
+      - 'build_scripts/**'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to (dev, qa, prod)'
+        required: true
+        default: 'dev'
+      apply_terraform:
+        description: 'Apply Terraform changes (true/false)'
+        required: true
+        default: false
+        type: boolean
+
 jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.apply_terraform == 'true' || github.event_name == 'push' && contains(github.event.head_commit.message, '[terraform]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+      - name: Configure AWS credentials for Terraform
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: terraform plan -var="environment=${{ github.event.inputs.environment || 'dev' }}" -out=tfplan
+        env:
+          TF_VAR_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v3
+        with:
+          name: terraform-plan
+          path: ./terraform/tfplan
+      - name: Terraform Apply (Manual Approval)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.apply_terraform == 'true' }}
+        working-directory: ./terraform
+        run: terraform apply -auto-approve tfplan
+        env:
+          TF_VAR_aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          TF_VAR_aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
   deployment:
     runs-on: ubuntu-latest
+    needs: terraform
+    if: ${{ always() || github.event_name != 'workflow_dispatch' || github.event.inputs.apply_terraform != 'true' }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -19,12 +77,22 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
+      - name: Determine Environment from Branch
+        run: |
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+          elif [[ "${{ github.ref_name }}" == "qa" ]]; then
+            echo "ENVIRONMENT=qa" >> $GITHUB_ENV
+          else
+            echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+          fi
       - name: Run deployment script
         env:
           COMMIT_SHA: ${{ github.sha }}
-          BRANCH_NAME:  ${{ github.ref_name }}
+          BRANCH_NAME: ${{ github.ref_name }}
           DEVELOPER: ${{ github.actor }}
           S3_BUCKET_DEV: ${{ vars.S3_BUCKET_DEV }}
           S3_BUCKET_QA: ${{ vars.S3_BUCKET_QA }}
           S3_BUCKET_PROD: ${{ vars.S3_BUCKET_PROD }}
+          ENVIRONMENT: ${{ github.event.inputs.environment || env.ENVIRONMENT }}
         run: python build_scripts/deploy_lambdas.py
