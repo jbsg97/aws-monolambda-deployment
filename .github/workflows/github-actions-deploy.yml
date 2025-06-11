@@ -30,7 +30,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.5.0
+          terraform_version: 1.9.0
       - name: Configure AWS credentials for Terraform
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -39,7 +39,8 @@ jobs:
           aws-region: us-east-1
       - name: Terraform Init
         working-directory: ./terraform
-        run: terraform init
+        run: |
+          terraform init || (echo "Init failed, retrying with backend config override..." && terraform init -backend-config="bucket=mvshub-terraform-state" -backend-config="key=state/terraform.tfstate" -backend-config="region=us-east-1" -backend-config="dynamodb_table=mvshub-terraform-locks")
       - name: Terraform Plan
         working-directory: ./terraform
         run: terraform plan -var="environment=${{ github.event.inputs.environment || 'dev' }}" -out=tfplan
